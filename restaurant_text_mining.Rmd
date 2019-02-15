@@ -1,0 +1,421 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Doing first for restaurant reviews
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(tidytext)
+library(textnets)
+library(SnowballC)
+library(htmlwidgets)
+library(wordcloud)
+library(reshape2)
+library(RColorBrewer)
+
+```
+
+```{r}
+# load data: hr --> hotel reviews ; rr --> restaurant reviews
+rr <- read_csv('TA_restaurants_curated.csv')
+
+# renaming column names in restaurant data
+new_restaurant_col_names <- c('sn', 'name', 'city', 'cuisine_style', 'ranking', 'rating', 'price_range', '#reviews', 'reviews', 'url', 'id')
+colnames(rr) <- new_restaurant_col_names
+rr$reviews <- gsub('[][0-9[[:punct:]]', '', rr$reviews)
+
+```
+
+```{r}
+# Divide dataset based into 6 cities: Amsterdam, Barcelona, London, Milan, Paris, Vienna
+rr.a <- rr %>% filter(city == 'Amsterdam')
+rr.b <- rr %>% filter(city == 'Barcelona')
+rr.l <- rr %>% filter(city == 'London')
+rr.m <- rr %>% filter(city == 'Milan')
+rr.p <- rr %>% filter(city == 'Paris')
+rr.v <- rr %>% filter(city == 'Vienna')
+
+# selecting relevant columns: city, reviews
+rr.a1 <- rr.a %>% select(city, reviews) %>% filter(!is.na(reviews))
+rr.b1 <- rr.b %>% select(city, reviews) %>% filter(!is.na(reviews))
+rr.l1 <- rr.l %>% select(city, reviews) %>% filter(!is.na(reviews))
+rr.m1 <- rr.m %>% select(city, reviews) %>% filter(!is.na(reviews))
+rr.p1 <- rr.p %>% select(city, reviews) %>% filter(!is.na(reviews))
+rr.v1 <- rr.v %>% select(city, reviews) %>% filter(!is.na(reviews))
+```
+
+
+```{r}
+rr.at <- rr.a1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+rr.bt <- rr.b1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+rr.lt <- rr.l1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+rr.mt <- rr.m1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+rr.pt <- rr.p1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+rr.vt <- rr.v1 %>% unnest_tokens(word, reviews) %>% anti_join(stop_words)
+```
+
+
+```{r}
+# counting common words for each six cities: Amsterdam, Paris, London, Vienna, Barcelona, Milan
+
+rr.at %>% count(word, sort=T) %>% 
+  filter(n > 70) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('Amsterdam') +
+  coord_flip() 
+rr.bt %>% count(word, sort=T) %>% 
+  filter(n > 150) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('Barcelona') +
+  coord_flip()
+rr.lt %>% count(word, sort=T) %>% 
+  filter(n > 300) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('London') +
+  coord_flip()
+rr.mt %>% count(word, sort=T) %>% 
+  filter(n > 100) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('Milan') +
+  coord_flip()
+rr.pt %>% count(word, sort=T) %>% 
+  filter(n > 200) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('Paris') +
+  coord_flip()
+rr.vt %>% count(word, sort=T) %>% 
+  filter(n > 80) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill=n)) +
+  geom_col() +
+  xlab('Vienna') +
+  coord_flip()
+```
+
+#### Do sentiment analysis (positive - negative) & compare across 3 lexicons: afinn, bing, nrc
+```{r}
+rr.at.afinn <- rr.at %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.at.afinn
+
+rr.at.bing <- rr.at %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.at.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Amsterdam_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.at.nrc <- rr.at %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.at.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Amsterdam_nrc') +
+  coord_flip()
+```
+
+```{r}
+rr.bt.afinn <- rr.bt %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.bt.afinn
+
+rr.bt.bing <- rr.bt %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.bt.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Barcelona_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.bt.nrc <- rr.bt %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.bt.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Barcelona_nrc') +
+  coord_flip()
+```
+
+```{r}
+rr.lt.afinn <- rr.lt %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.lt.afinn
+
+rr.lt.bing <- rr.lt %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.lt.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'London_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.lt.nrc <- rr.lt %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.lt.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'London_nrc') +
+  coord_flip()
+```
+
+```{r}
+rr.mt.afinn <- rr.mt %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.mt.afinn
+
+rr.mt.bing <- rr.mt %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.mt.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Milan_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.mt.nrc <- rr.mt %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.mt.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Milan_nrc') +
+  coord_flip()
+```
+
+```{r}
+rr.pt.afinn <- rr.pt %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.pt.afinn
+
+rr.pt.bing <- rr.pt %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.pt.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Paris_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.pt.nrc <- rr.pt %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.pt.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Paris_nrc') +
+  coord_flip()
+```
+
+
+```{r}
+rr.vt.afinn <- rr.vt %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+
+rr.vt.afinn
+
+rr.vt.bing <- rr.vt %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+
+rr.vt.bing %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Vienna_bing') +
+  coord_flip()
+
+nrc <- get_sentiments('nrc') %>% filter(sentiment %in% c('positive', 'negative'))
+
+rr.vt.nrc <- rr.vt %>%
+  inner_join(nrc) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+rr.vt.nrc %>%
+  group_by(sentiment) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = 'Vienna_nrc') +
+  coord_flip()
+```
+
+#### Make wordclouds
+
+```{r}
+rr.at %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+rr.bt %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+rr.lt %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+rr.mt %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+rr.pt %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+rr.vt %>% count(word) %>% with(wordcloud(word, n, max.words = 100))
+
+```
+
+```{r}
+rr.at.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+rr.bt.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+rr.lt.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+rr.mt.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+rr.pt.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+rr.vt.bing %>% acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"), max.words = 100)
+
+
+```
+

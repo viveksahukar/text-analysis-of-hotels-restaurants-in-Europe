@@ -1,0 +1,97 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(tidytext)
+library(textnets)
+library(SnowballC)
+library(htmlwidgets)
+```
+
+```{r}
+# load data: hr --> hotle reviews ; rr --> restaurant reviews
+# hr <- read_csv('Hotel_Reviews.csv')
+rr <- read_csv('TA_restaurants_curated.csv')
+```
+
+```{r}
+# Data munging
+
+# renaming column names in restaurant data
+new_restaurant_col_names <- c('sn', 'name', 'city', 'cuisine_style', 'ranking', 'rating', 'price_range', '#reviews', 'reviews', 'url', 'id')
+colnames(rr) <- new_restaurant_col_names
+
+```
+
+```{r}
+# Tidying up text for Prepping text for text network
+
+rr$reviews <- gsub('[][0-9[[:punct:]]', '', rr$reviews)
+rr_reviews <- rr %>% group_by(city) 
+
+glimpse(rr_reviews)
+```
+
+#### NODES: 'city' ; POS: 'nouns'
+
+```{r}
+# 1. Prepare text network: NODES: 'city' ; POS: 'nouns'
+prepped_rr <- PrepText(rr_reviews, groupvar = 'city', textvar = 'reviews', node_type = 'groups', tokenizer = 'words', pos = 'nouns', remove_stop_words = TRUE, remove_numbers = TRUE, compound_nouns = TRUE)
+```
+
+```{r}
+# 2. Create text network
+rr_text_network <- CreateTextnet(prepped_rr)
+```
+
+```{r}
+# 3. Visualize text network
+VisTextNet(rr_text_network, label_degree_cut = 0, alpha = 0.30, betweenness = TRUE)
+```
+
+```{r}
+# Interactive Visualization
+VisTextNetD3(rr_text_network)
+```
+
+```{r}
+# 4. Analyze text network
+rr_communities <- TextCommunities(rr_text_network)
+head(rr_communities)
+
+rr_top_words_modularity_classes <- InterpretText(rr_text_network, prepped_rr)
+head(rr_top_words_modularity_classes)
+
+rr_text_centrality <- TextCentrality(rr_text_network)
+head(rr_text_centrality)
+```
+
+```{r}
+# load data: hr --> hotel reviews ; rr --> restaurant reviews
+hr <- read_csv('Hotel_Reviews.csv')
+```
+
+```{r}
+glimpse(hr)
+```
+
